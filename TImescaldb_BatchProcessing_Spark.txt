@@ -1,0 +1,77 @@
+
+docker run --network singlenodekafka_default -v D:/TimescaleDB_JCI/Day4/pgdriver:/pgdriver --name myspark -it spark /opt/spark/bin/spark-shell --driver-class-path /pgdriver/postgresql-42.7.4.jar --jars /pgdriver/postgresql-42.7.4.jar
+
+val jdbcDF = spark.read.format("jdbc").option("driver", "org.postgresql.Driver").option("url", "jdbc:postgresql://timescaledb1/my_timescale_db") .option("dbtable", "public.sample_data").option("user", "postgres").option("password", "password").load()
+
+
+jdbcDF.show()
+
+jdbcDF.show()  // Shows the default 20 rows
+jdbcDF.show(5)  // Shows the first 50 rows
+jdbcDF.show(truncate = false)  // Shows all columns without truncation
+
+val selectedColumnsDF = jdbcDF.select("metric_id", "value")  // Replace with actual column names
+selectedColumnsDF.show()
+
+// Select records where column1 has a specific value
+val filteredDF = jdbcDF.where("metric_id = 1")
+filteredDF.show()
+
+// Select records where column2 is greater than a certain threshold
+val filteredDF2 = jdbcDF.where("value > 10")
+filteredDF2.show()
+
+// Count the number of records in each group of column1
+val countByGroupDF = jdbcDF.groupBy("metric_id").count()
+countByGroupDF.show()
+
+// Sum column2 for each group of column1
+val sumByGroupDF = jdbcDF.groupBy("metric_id").sum("value")  // Replace with actual column names
+sumByGroupDF.show()
+
+// Calculate average of column2 for each group of column3
+val avgByGroupDF = jdbcDF.groupBy("metric_id").avg("value")
+avgByGroupDF.show()
+
+// Select specific columns, filter by a condition, and then group by a column to calculate the sum
+val complexDF = jdbcDF.select("metric_id", "value").where("value > 10").groupBy("metric_id").agg(sum("value").alias("total_value")) 
+  
+complexDF.show()
+
+jdbcDF.createOrReplaceTempView("sample_data")
+
+// Example SQL queries
+spark.sql("SELECT * FROM sample_data").show()
+spark.sql("SELECT metric_id, value FROM sample_data WHERE value > 10").show()
+spark.sql("SELECT metric_id, COUNT(*) FROM sample_data GROUP BY metric_id").show()
+spark.sql("SELECT metric_id, SUM(value) AS total_column2 FROM sample_data GROUP BY metric_id").show()
+
+
+import org.apache.spark.sql.functions.udf
+val doubleValue = udf((value: Double) => value * 2)
+spark.udf.register("doubleValue", doubleValue)
+
+val transformedDF = jdbcDF.withColumn("doubled_value", doubleValue(jdbcDF("value")))
+
+transformedDF.show()
+
+
+val windowSpec = org.apache.spark.sql.expressions.Window.partitionBy("metric_id").orderBy("time")     
+
+val movingAvgQuery = """
+  SELECT time, metric_id, value,
+         AVG(value) OVER (PARTITION BY metric_id ORDER BY time ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS moving_avg
+  FROM sample_data
+"""
+val resultDF = spark.sql(movingAvgQuery)
+
+resultDF.show()
+
+val rankQuery = """
+  SELECT time, metric_id, value,
+         RANK() OVER (PARTITION BY metric_id ORDER BY value DESC) AS rank
+  FROM sample_data
+"""
+
+val rankDF = spark.sql(rankQuery)
+rankDF.show()
