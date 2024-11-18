@@ -1,0 +1,46 @@
+
+https://www.confluent.io/hub/confluentinc/kafka-connect-jdbc
+Download Self hosted option
+
+docker cp kafka-jdbc singlenodekafka-kafka-1:/
+docker network ls
+docker run -d --network singlenodekafka_default  --name timescaledb1 -p 5432:5432 -e POSTGRES_PASSWORD=password timescale/timescaledb-ha:pg16
+docker exec -it timescaledb1 bash
+psql -d "postgres://postgres:password@localhost/postgres"
+
+CREATE DATABASE my_timescale_db;
+\c my_timescale_db
+
+CREATE TABLE sample_data (
+    time TIMESTAMPTZ NOT NULL,
+    metric_id INTEGER,
+    value DOUBLE PRECISION
+);
+
+-- Enable timescale hypertable on `sample_data`
+SELECT create_hypertable('sample_data', 'time');
+
+INSERT INTO sample_data (time, metric_id, value) VALUES ('2024-11-01 00:00:00', 1, 10.5);
+INSERT INTO sample_data (time, metric_id, value) VALUES ('2024-11-01 01:00:00', 1, 12.7);
+INSERT INTO sample_data (time, metric_id, value) VALUES ('2024-11-01 02:00:00', 1, 9.3);
+
+# Switch to the Kafka container
+
+cd kafka-jdbc
+cp lib/* /opt/bitnami/kafka/libs
+
+kafka-topics.sh --list --bootstrap-server localhost:9092
+
+connect-standalone.sh /opt/bitnami/kafka/config/connect-standalone.properties etc/source-quickstart-sqlite.properties /opt/bitnami/kafka/config/connect-console-sink.properties
+
+INSERT INTO sample_data (time, metric_id, value) VALUES ('2024-11-01 03:00:00', 1, 11.8);
+INSERT INTO sample_data (time, metric_id, value) VALUES ('2024-11-01 04:00:00', 1, 10.0);
+INSERT INTO sample_data (time, metric_id, value) VALUES ('2024-11-01 05:00:00', 2, 14.2);
+INSERT INTO sample_data (time, metric_id, value) VALUES ('2024-11-01 06:00:00', 2, 15.6);
+INSERT INTO sample_data (time, metric_id, value) VALUES ('2024-11-01 07:00:00', 2, 13.9);
+INSERT INTO sample_data (time, metric_id, value) VALUES ('2024-11-01 08:00:00', 2, 16.1);
+INSERT INTO sample_data (time, metric_id, value) VALUES ('2024-11-01 09:00:00', 2, 12.4);
+
+
+#Observe the number of records commited count in the console
+
